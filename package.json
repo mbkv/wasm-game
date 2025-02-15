@@ -1,0 +1,21 @@
+{
+  "name": "wasmtest",
+  "module": "app/app.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "vite": "^6.1.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "start": "concurrently npm:start:*",
+    "start:typescript": "vite --port 3000 --host",
+    "start:c": "./build.sh --watch"
+  },
+  "dependencies": {
+    "normalize.css": "^8.0.1"
+  }
+}
