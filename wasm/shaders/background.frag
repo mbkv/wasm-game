@@ -1,5 +1,5 @@
 #version 300 es
-precision highp float;
+precision mediump float;
 
 uniform uint u_seed;
 uniform float u_time;
@@ -76,7 +76,7 @@ vec3 kelvinToRGB(float kelvin) {
 
 void main() {
     vec3 color = vec3(0.0);
-    float target = 0.9999;
+    float target = 0.999;
 
     int i = 4;
     while (i-- != 0) {
