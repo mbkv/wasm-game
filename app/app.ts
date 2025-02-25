@@ -345,7 +345,6 @@ const wasmInstance = {
                     colorSpace: "srgb",
                   },
                 );
-                debugger;
                 response.width = img.naturalWidth;
                 response.height = img.naturalHeight;
                 response.bytes = imageData.data;
