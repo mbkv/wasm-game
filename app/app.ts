@@ -2,7 +2,7 @@ import "normalize.css";
 import "./app.css";
 import { mapUpsert } from "./utils";
 
-const isDev = false;
+const isDev = true;
 
 interface WasmExports extends WebAssembly.Exports {
   memory: WebAssembly.Memory;
@@ -107,11 +107,28 @@ function assertCtx(ctx: WebGL2RenderingContext | undefined): asserts ctx {
   assert(ctx, "Ctx not initialized");
 }
 
+const errors = new Map<string, number>();
+
 function checkGlErrors(gl: WebGL2RenderingContext, name: string) {
   let hasErrors: boolean = false;
   while (true) {
     const error = gl.getError();
     hasErrors = hasErrors && error === gl.NO_ERROR;
+    if (error !== gl.NO_ERROR) {
+      const errorCount = mapUpsert(errors, name, {
+        insert() {
+          return 1;
+        },
+        update(old) {
+          return old + 1;
+        },
+      });
+      if (errorCount === 100) {
+        console.info("Gonna skip reporting this error");
+      } else if (errorCount > 100) {
+        continue;
+      }
+    }
     switch (error) {
       case gl.NO_ERROR:
         return hasErrors;
@@ -328,6 +345,7 @@ const wasmInstance = {
                     colorSpace: "srgb",
                   },
                 );
+                debugger;
                 response.width = img.naturalWidth;
                 response.height = img.naturalHeight;
                 response.bytes = imageData.data;
@@ -845,6 +863,12 @@ const wasmInstance = {
       (gl, programIndex: GLuint): void => {
         const program = programs.get(programIndex);
         gl.linkProgram(program);
+      },
+    ),
+    glPixelStorei: makeGlFunction(
+      "glPixelStorei",
+      (gl, pname: GLenum, param: GLint) => {
+        gl.pixelStorei(pname, param);
       },
     ),
     glScissor: makeGlFunction(

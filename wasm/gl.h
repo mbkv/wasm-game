@@ -654,6 +654,7 @@ JS_WEBGL_FN("glGetShaderInfoLog") void glGetShaderInfoLog(GLuint shader, GLsizei
 JS_WEBGL_FN("glGetShaderParameter") GLint glGetShaderParameter(GLuint shader, GLenum pname);
 JS_WEBGL_FN("glGetUniformLocation") GLint glGetUniformLocation(GLuint program, const GLchar *name);
 JS_WEBGL_FN("glLinkProgram") void glLinkProgram(GLuint program);
+JS_WEBGL_FN("glPixelStorei") void glPixelStorei(GLenum pname, GLint param);
 JS_WEBGL_FN("glScissor") void glScissor(GLint x, GLint y, GLsizei width, GLsizei height);
 JS_WEBGL_FN("glShaderSource") void glShaderSource(GLuint shader, GLsizei count, const GLchar *const*string, const GLint *length);
 JS_WEBGL_FN("glTexImage2D") void glTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels);
