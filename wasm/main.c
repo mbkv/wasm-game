@@ -428,7 +428,7 @@ void bullet_spawn(s32 bullet_type_key, f32 direction);
 void player_update(f32 dt)
 {
     Player *player         = &game_state.player;
-    f32     movement_speed = game_size.x * 0.5;
+    f32     movement_speed = game_size.x * 0.75;
     f32     min_left       = 10.0f;
     f32     max_right      = game_size.x - 10.0f - player->sprite.size.x;
 
