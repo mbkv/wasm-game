@@ -6,10 +6,12 @@ uniform float u_percent;
 uniform vec2 u_minmax_coord;
 uniform vec4 u_color;
 
+in vec2 vFragCoord;
+
 out vec4 FragColor;
 
 void main() {
-    float this_frag_percent = (gl_FragCoord.x - u_minmax_coord.x) / (u_minmax_coord.y - u_minmax_coord.x);
+    float this_frag_percent = (vFragCoord.x - u_minmax_coord.x) / (u_minmax_coord.y - u_minmax_coord.x);
     if (this_frag_percent <= u_percent) {
         FragColor = u_color;
     } else {

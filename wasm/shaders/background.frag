@@ -3,6 +3,9 @@ precision mediump float;
 
 uniform uint u_seed;
 uniform float u_time;
+uniform float u_scaling;
+
+in vec2 fragCoord;
 
 out vec4 fragColor;
 
@@ -80,7 +83,8 @@ void main() {
 
     int i = 4;
     while (i-- != 0) {
-        vec2 uv = gl_FragCoord.xy / 4.0;
+        vec2 uv = (fragCoord.xy) / (.25 * u_scaling);
+        uv += 2000.0;
         uv.y = uv.y + u_time * 2.0 * float(i + 5);
         uv = floor(uv);
         float rand = rand_vec2(vec2(uv.x + float(i * 5000), uv.y));

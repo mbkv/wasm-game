@@ -21,13 +21,16 @@ void requestAnimationFrameLoop(void *(*frame_loop)(f32));
 #define MAX_ENEMIES 50
 #define MAX_BULLETS 30
 
-Vec2  window_size               = {0};
-_Bool window_changed_this_frame = true;
+f32  scaling     = 0.0f;
+Vec2 game_size   = {400.0f, 500.0f};
+Vec2 window_size = {0};
 
 typedef struct
 {
     GLuint program;
     VAO    v;
+    GLint  resolution_uniform;
+    GLint  scaling_uniform;
     GLint  time_uniform;
     GLint  seed_uniform;
 } BackgroundRenderer;
@@ -120,17 +123,25 @@ typedef struct
 typedef struct
 {
     Entity base;
+    Sprite sprite;
     f32    speed;
     f32    direction;
-    s16    bullet_type;
 } Bullet;
+
+enum MovementKey
+{
+    MOVEMENT_NONE,
+    MOVEMENT_LEFT,
+    MOVEMENT_RIGHT,
+};
 
 typedef struct
 {
-    _Bool move_left;
-    _Bool move_right;
-    _Bool shoot;
-    f32   movement_analog;
+    enum MovementKey last_movement_key;
+    _Bool            move_left;
+    _Bool            move_right;
+    _Bool            shoot;
+    f32              movement_analog;
 } Actions;
 
 typedef struct
@@ -140,7 +151,7 @@ typedef struct
     Player       player;
     Enemy        enemies[MAX_ENEMIES];
     Bullet       bullets[MAX_BULLETS];
-    Sprite       bullet_types[10];
+    BulletType   bullet_types[10];
     EnemyType    enemy_types[10];
     f32          delta_time;
     f32          game_time;
@@ -164,8 +175,10 @@ void background_renderer_init(BackgroundRenderer *renderer)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, false, 0, 0);
 
-    renderer->time_uniform = glGetUniformLocation(renderer->program, "u_time");
-    renderer->seed_uniform = glGetUniformLocation(renderer->program, "u_seed");
+    renderer->resolution_uniform = glGetUniformLocation(renderer->program, "u_resolution");
+    renderer->scaling_uniform    = glGetUniformLocation(renderer->program, "u_scaling");
+    renderer->time_uniform       = glGetUniformLocation(renderer->program, "u_time");
+    renderer->seed_uniform       = glGetUniformLocation(renderer->program, "u_seed");
 }
 
 void shape_renderer_init(ShapeRenderer *renderer)
@@ -267,16 +280,7 @@ void sprite_renderer_setup(SpriteRenderer *renderer, VAO *v)
     glEnableVertexAttribArray(1);
 }
 
-// void init_enemies(void);
-// void update_player(f32 dt);
-// void update_enemies(f32 dt);
-// void update_bullets(f32 dt);
-// void check_collisions(void);
-// _Bool check_collision(Entity a, Entity b);
-// void spawn_bullet(void);
-// void render_game(void);
-//
-GLuint compile_shader(const char *vs, const char *fs)
+GLuint shader_compile(const char *vs, const char *fs)
 {
     GLuint vs_shader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vs_shader, 1, &vs, NULL);
@@ -325,7 +329,7 @@ GLuint compile_shader(const char *vs, const char *fs)
     return program;
 }
 
-void init_graphics(void)
+void graphics_init(void)
 {
     static const char sprites_vs_src[] = {
 #embed "shaders/sprites.vert"
@@ -358,12 +362,12 @@ void init_graphics(void)
 #embed "shaders/shape.frag"
         , 0};
 
-    game_state.renderer.sprite.program = compile_shader(sprites_vs_src, sprites_fs_src);
-    game_state.renderer.ui.program     = compile_shader(ui_vs_src, ui_fs_src);
-    game_state.renderer.loader.program = compile_shader(loader_vs_src, loader_fs_src);
+    game_state.renderer.sprite.program = shader_compile(sprites_vs_src, sprites_fs_src);
+    game_state.renderer.ui.program     = shader_compile(ui_vs_src, ui_fs_src);
+    game_state.renderer.loader.program = shader_compile(loader_vs_src, loader_fs_src);
 
-    game_state.renderer.background.program = compile_shader(background_vs_src, background_fs_src);
-    game_state.renderer.shapes.program     = compile_shader(shape_vs_src, shape_fs_src);
+    game_state.renderer.background.program = shader_compile(background_vs_src, background_fs_src);
+    game_state.renderer.shapes.program     = shader_compile(shape_vs_src, shape_fs_src);
 
     background_renderer_init(&game_state.renderer.background);
     shape_renderer_init(&game_state.renderer.shapes);
@@ -378,64 +382,79 @@ void init_graphics(void)
     glPixelStorei(GL_UNPACK_FLIP_Y_WEBGL, true);
 }
 
-#define PLAYER_WIDTH 256
-#define PLAYER_HEIGHT 256
+#define BULLET_WIDTH 8
+#define BULLET_HEIGHT 8
 
-void init_player(void)
+void bullets_init(void)
 {
-    game_state.player.base.active       = true;
-    game_state.player.sprite.size       = vec2(PLAYER_WIDTH, PLAYER_HEIGHT);
-    game_state.player.sprite.position   = vec2_center(window_size, game_state.player.sprite.size);
-    game_state.player.sprite.position.y = 100.0f;
+    game_state.bullet_types[0].size = vec2(BULLET_WIDTH, BULLET_HEIGHT);
+    game_state.bullet_types[1].size = vec2(BULLET_WIDTH, BULLET_HEIGHT);
+}
+
+#define PLAYER_WIDTH 50
+#define PLAYER_HEIGHT 50
+
+void player_init(void)
+{
+    game_state.player.base.active     = true;
+    game_state.player.sprite.size     = vec2(PLAYER_WIDTH, PLAYER_HEIGHT);
+    game_state.player.sprite.position = rect_center_child(game_size, game_state.player.sprite.size);
+    game_state.player.sprite.position.y = 10.0f;
     game_state.player.speed             = 1.0f;
 }
-//
-// void init_enemies(void) {
-//   f32 x_start = -0.8f;
-//   f32 y_start = 0.8f;
-//   f32 x_spacing = 0.2f;
-//   f32 y_spacing = 0.15f;
-//
-//   for (int i = 0; i < MAX_ENEMIES; i++) {
-//     int row = i / 10;
-//     int col = i % 10;
-//
-//     game_state.enemies[i].base.x = x_start + (col * x_spacing);
-//     game_state.enemies[i].base.y = y_start - (row * y_spacing);
-//     game_state.enemies[i].base.width = 0.08f;
-//     game_state.enemies[i].base.height = 0.08f;
-//     game_state.enemies[i].base.active = true;
-//     game_state.enemies[i].speed = 0.5f;
-//   }
-// }
-//
 
-void update_player(f32 dt)
+// void enemies_init(void)
+// {
+//     f32 x_start   = -0.8f;
+//     f32 y_start   = 0.8f;
+//     f32 x_spacing = 0.2f;
+//     f32 y_spacing = 0.15f;
+//
+//     for (int i = 0; i < MAX_ENEMIES; i++)
+//     {
+//         int row = i / 10;
+//         int col = i % 10;
+//
+//         game_state.enemies[i].base.x      = x_start + (col * x_spacing);
+//         game_state.enemies[i].base.y      = y_start - (row * y_spacing);
+//         game_state.enemies[i].base.width  = 0.08f;
+//         game_state.enemies[i].base.height = 0.08f;
+//         game_state.enemies[i].base.active = true;
+//         game_state.enemies[i].speed       = 0.5f;
+//     }
+// }
+
+void bullet_spawn(s32 bullet_type_key, f32 direction);
+void player_update(f32 dt)
 {
     Player *player         = &game_state.player;
-    f32     movement_speed = window_size.x * 0.3;
-    f32     min_left       = PLAYER_WIDTH;
-    f32     max_right      = window_size.x - PLAYER_WIDTH - player->sprite.size.x;
-    if (window_changed_this_frame)
-    {
-        player->sprite.position.x = clampf(player->sprite.position.x, min_left, max_right);
-    }
+    f32     movement_speed = game_size.x * 0.5;
+    f32     min_left       = 10.0f;
+    f32     max_right      = game_size.x - 10.0f - player->sprite.size.x;
 
-    if (game_state.actions.move_left && player->sprite.position.x > min_left)
+    player->sprite.position.x = clampf(player->sprite.position.x, min_left, max_right);
+
+    if (game_state.actions.last_movement_key == MOVEMENT_LEFT)
     {
-        player->sprite.position.x -= player->speed * dt * movement_speed;
+        if (player->sprite.position.x > min_left)
+        {
+            player->sprite.position.x -= player->speed * dt * movement_speed;
+        }
     }
-    if (game_state.actions.move_right && player->sprite.position.x < max_right)
+    else if (game_state.actions.last_movement_key == MOVEMENT_RIGHT)
     {
-        player->sprite.position.x += player->speed * dt * movement_speed;
+        if (player->sprite.position.x < max_right)
+        {
+            player->sprite.position.x += player->speed * dt * movement_speed;
+        }
     }
-    f32 current_time = time(NULL);
+    f32 current_time = monotonic_time();
     f32 last_fire    = player->last_fire;
     f32 fire_rate    = 0.25;
     if (game_state.actions.shoot && current_time > last_fire + fire_rate)
     {
         player->last_fire = current_time;
-        // spawn_bullet();
+        bullet_spawn(0, 1.0f);
     }
 }
 //
@@ -452,60 +471,46 @@ void update_player(f32 dt)
 //   }
 // }
 //
-// void update_bullets(f32 dt) {
-//   for (int i = 0; i < MAX_BULLETS; i++) {
-//     if (!game_state.bullets[i].base.active)
-//       continue;
-//
-//     game_state.bullets[i].base.y +=
-//         game_state.bullets[i].speed * game_state.bullets[i].direction * dt;
-//
-//     if (game_state.bullets[i].base.y > 1.0f ||
-//         game_state.bullets[i].base.y < -1.0f) {
-//       game_state.bullets[i].base.active = false;
-//     }
-//   }
-// }
-//
-// void spawn_bullet(void) {
-//   for (int i = 0; i < MAX_BULLETS; i++) {
-//     if (!game_state.bullets[i].base.active) {
-//       game_state.bullets[i].base.active = true;
-//       game_state.bullets[i].base.x = game_state.player.base.x;
-//       game_state.bullets[i].base.y = game_state.player.base.y + 0.1f;
-//       game_state.bullets[i].base.width = 0.02f;
-//       game_state.bullets[i].base.height = 0.06f;
-//       game_state.bullets[i].speed = 2.0f;
-//       game_state.bullets[i].direction = 1.0f;
-//       break;
-//     }
-//   }
-// }
-//
-// void check_collisions(void) {
-//   for (int i = 0; i < MAX_BULLETS; i++) {
-//     if (!game_state.bullets[i].base.active)
-//       continue;
-//
-//     for (int j = 0; j < MAX_ENEMIES; j++) {
-//       if (!game_state.enemies[j].base.active)
-//         continue;
-//
-//       if (check_collision(game_state.bullets[i].base,
-//                           game_state.enemies[j].base)) {
-//         game_state.bullets[i].base.active = false;
-//         game_state.enemies[j].base.active = false;
-//         break;
-//       }
-//     }
-//   }
-// }
-//
-// _Bool check_collision(Entity a, Entity b) {
-//   return (a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height
-//   &&
-//           a.y + a.height > b.y);
-// }
+void bullets_update(f32 dt)
+{
+    for (int i = 0; i < MAX_BULLETS; i++)
+    {
+        if (!game_state.bullets[i].base.active)
+            continue;
+        game_state.bullets[i].sprite.position.y +=
+            game_state.bullets[i].speed * game_state.bullets[i].direction * dt;
+
+        if (game_state.bullets[i].sprite.position.y > game_size.y ||
+            game_state.bullets[i].sprite.position.y < 0)
+        {
+            game_state.bullets[i] = (Bullet){0};
+        }
+    }
+}
+
+void bullet_spawn(s32 bullet_type_key, f32 direction)
+{
+    BulletType bullet_type = game_state.bullet_types[bullet_type_key];
+
+    for (int i = 0; i < MAX_BULLETS; i++)
+    {
+        if (!game_state.bullets[i].base.active)
+        {
+            Vec2 center   = rect_calculate_center(game_state.player.sprite.position,
+                                                  game_state.player.sprite.size);
+            Vec2 position = rect_calculate_position_from_center(center, bullet_type.size);
+            position.y =
+                game_state.player.sprite.position.y + game_state.player.sprite.size.y + 2.5f;
+            game_state.bullets[i].base.active     = true;
+            game_state.bullets[i].sprite.position = position;
+            game_state.bullets[i].sprite.texture  = bullet_type.texture;
+            game_state.bullets[i].sprite.size     = bullet_type.size;
+            game_state.bullets[i].speed           = 1000.0f;
+            game_state.bullets[i].direction       = direction;
+            break;
+        }
+    }
+}
 
 u32 background_starfield_seed = 0;
 
@@ -514,6 +519,8 @@ void background_render(void)
     BackgroundRenderer *renderer = &game_state.renderer.background;
     glUseProgram(renderer->program);
     glBindVertexArray(renderer->v.vao);
+    glUniform2f(renderer->resolution_uniform, window_size.x, window_size.y);
+    glUniform1f(renderer->scaling_uniform, scaling);
     glUniform1f(renderer->time_uniform, game_state.game_time);
     if (background_starfield_seed == 0)
     {
@@ -524,10 +531,10 @@ void background_render(void)
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
 }
 
-#define LOADING_BAR_BORDER 10.0f
+#define LOADING_BAR_BORDER 2.0f
 #define LOADING_BAR_RADIUS 9999.9f
-#define LOADING_BAR_HEIGHT 40.0f
-#define LOADING_BAR_WIDTH 800.0f
+#define LOADING_BAR_HEIGHT 15.0f
+#define LOADING_BAR_WIDTH 300.0f
 #define LOADING_BAR_QUALITY 44
 VAO  loading_bar_outline  = {0};
 VAO  loading_bar          = {0};
@@ -538,18 +545,19 @@ const Vec2 loading_bar_size = {LOADING_BAR_WIDTH, LOADING_BAR_HEIGHT};
 
 void loading_bar_render(f32 percent)
 {
+    // printf("%f", percent);
     ShapeRenderer      *shapes = &game_state.renderer.shapes;
     LoadingBarRenderer *loader = &game_state.renderer.loader;
 
     glUseProgram(shapes->program);
 
-    if (window_changed_this_frame)
+    if (loading_bar_outline.vao == 0)
     {
         Vec2              *positions   = malloc(sizeof(Vec2) * LOADING_BAR_QUALITY);
         ShapeRendererData *vertex_data = malloc(sizeof(ShapeRendererData) * LOADING_BAR_QUALITY);
 
-        loading_bar_position.x = (window_size.x / 2.0f) - (loading_bar_size.x / 2.0f);
-        loading_bar_position.y = window_size.y * 0.4f;
+        loading_bar_position.x = (game_size.x / 2.0f) - (loading_bar_size.x / 2.0f);
+        loading_bar_position.y = game_size.y * 0.4f;
 
         rounded_rect_generate(positions, LOADING_BAR_QUALITY, loading_bar_position,
                               loading_bar_size, LOADING_BAR_RADIUS);
@@ -580,7 +588,7 @@ void loading_bar_render(f32 percent)
 
     glUseProgram(loader->program);
 
-    if (window_changed_this_frame)
+    if (loading_bar.vao == 0)
     {
         Vec2 *positions = malloc(sizeof(Vec2) * LOADING_BAR_QUALITY);
 
@@ -633,48 +641,17 @@ void sprite_render(Sprite *sprite)
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
 }
 
-// void render_game(void) {
-//   glClear(GL_COLOR_BUFFER_BIT);
-//   glUseProgram(game_state.shader_program);
-//
-//   GLint pos_location =
-//       glGetUniformLocation(game_state.shader_program, "uPosition");
-//
-//   if (game_state.player.base.active) {
-//     glUniform2f(pos_location, game_state.player.base.x,
-//                 game_state.player.base.y);
-//     glBindVertexArray(game_state.vao);
-//     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-//   }
-//
-//   for (int i = 0; i < MAX_ENEMIES; i++) {
-//     if (!game_state.enemies[i].base.active)
-//       continue;
-//
-//     glUniform2f(pos_location, game_state.enemies[i].base.x,
-//                 game_state.enemies[i].base.y);
-//     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-//   }
-//
-//   for (int i = 0; i < MAX_BULLETS; i++) {
-//     if (!game_state.bullets[i].base.active)
-//       continue;
-//
-//     glUniform2f(pos_location, game_state.bullets[i].base.x,
-//                 game_state.bullets[i].base.y);
-//     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-//   }
-// }
-//
 void handle_keydown(void)
 {
     if (strcmp("ArrowLeft", keyhandler_buffer) == 0)
     {
-        game_state.actions.move_left = true;
+        game_state.actions.last_movement_key = MOVEMENT_LEFT;
+        game_state.actions.move_left         = true;
     }
     else if (strcmp("ArrowRight", keyhandler_buffer) == 0)
     {
-        game_state.actions.move_right = true;
+        game_state.actions.last_movement_key = MOVEMENT_RIGHT;
+        game_state.actions.move_right        = true;
     }
     else if (strcmp("Space", keyhandler_buffer) == 0)
     {
@@ -687,10 +664,26 @@ void handle_keyup(void)
     if (strcmp("ArrowLeft", keyhandler_buffer) == 0)
     {
         game_state.actions.move_left = false;
+        if (game_state.actions.move_right)
+        {
+            game_state.actions.last_movement_key = MOVEMENT_RIGHT;
+        }
+        else
+        {
+            game_state.actions.last_movement_key = MOVEMENT_NONE;
+        }
     }
     else if (strcmp("ArrowRight", keyhandler_buffer) == 0)
     {
         game_state.actions.move_right = false;
+        if (game_state.actions.move_left)
+        {
+            game_state.actions.last_movement_key = MOVEMENT_LEFT;
+        }
+        else
+        {
+            game_state.actions.last_movement_key = MOVEMENT_NONE;
+        }
     }
     else if (strcmp("Space", keyhandler_buffer) == 0)
     {
@@ -701,28 +694,79 @@ void handle_keyup(void)
 void  *ptr = NULL;
 size_t len = 1 << 16;
 
-void *frame(f32 dt)
+void *game_loop(f32 dt)
 {
     game_state.delta_time = dt;
     game_state.game_time += dt;
 
-    update_player(dt);
-    //   update_enemies(dt);
-    //   update_bullets(dt);
-    //   check_collisions();
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    player_update(dt);
+    bullets_update(dt);
     background_render();
     sprite_render(&game_state.player.sprite);
+    for (int i = 0; i < MAX_BULLETS; i++)
+    {
+        if (game_state.bullets[i].base.active)
+        {
+            sprite_render(&game_state.bullets[i].sprite);
+        }
+    }
 
-    window_changed_this_frame = false;
-
-    return (void *)frame;
+    return (void *)game_loop;
 }
 
 void window_resize_handler(f32 width, f32 height)
 {
-    window_size.x             = width;
-    window_size.y             = height;
-    window_changed_this_frame = true;
+#if 0
+    f32 game_ratio   = game_size.x / game_size.y;
+    f32 screen_ratio = width / height;
+
+    if (game_ratio <= screen_ratio)
+    {
+        scaling = height / game_size.y;
+
+        f32 adjusted_screen_width = width / scaling;
+        game_position.x           = (adjusted_screen_width - game_size.x) / 2.0f;
+        game_position.y           = 0;
+    }
+    else
+    {
+        scaling = width / game_size.x;
+
+        f32 adjusted_screen_height = height / scaling;
+        game_position.x            = 0;
+        game_position.y            = (adjusted_screen_height - game_size.y) / 2.0f;
+    }
+    // printf("game_position: %f, %f\n", game_position.x, game_position.y);
+#endif
+#if 1
+    f32 game_ratio   = game_size.x / game_size.y;
+    f32 screen_ratio = width / height;
+
+    if (game_ratio <= screen_ratio)
+    {
+        scaling = height / game_size.y;
+
+        window_size.x = width / scaling;
+        window_size.y = game_size.y;
+    }
+    else
+    {
+        scaling = width / game_size.x;
+
+        window_size.y = height / scaling;
+        window_size.x = game_size.x;
+    }
+#endif
+#if 0
+    printf("%f <= %f, scaling %f", game_ratio, screen_ratio, scaling);
+    printf("width: %f, height: %f", width, height);
+    printf("game_size.x: %f, game_size.y: %f", game_size.x, game_size.y);
+    printf("scaling %f", scaling);
+    printf("game_position.x: %f, game_position.y: %f", game_position.x, game_position.y);
+#endif
+
     glViewport(0, 0, width, height);
 }
 
@@ -737,24 +781,31 @@ s32          all_assets         = 0;
 s32          finished_assets    = 0;
 LoadingAsset assets_loading[32] = {0};
 
+f32 loading = 0.0;
+
 void *loading_screen_loop(f32 diff)
 {
     game_state.delta_time = diff;
     game_state.game_time += diff;
 
     background_render();
+#if 1
     loading_bar_render((float)finished_assets / (float)all_assets);
 
-    window_changed_this_frame = false;
+    if (finished_assets >= all_assets)
+    {
+        return (void *)game_loop;
+    }
+#else
+    loading_bar_render(loading / 100.0f);
+    loading += 0.1f;
+    if (loading > 101.0f)
+    {
+        loading -= 100.0f;
+    }
+#endif
 
-    if (all_assets > finished_assets)
-    {
-        return (void *)loading_screen_loop;
-    }
-    else
-    {
-        return (void *)frame;
-    }
+    return (void *)loading_screen_loop;
 }
 
 void on_loading_progress(s32 key)
@@ -779,13 +830,14 @@ void on_loading_progress(s32 key)
             glGenTextures(1, &out->id);
             glBindTexture(GL_TEXTURE_2D, out->id);
 
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
                          bytes);
+            glGenerateMipmap(GL_TEXTURE_2D);
 
             assets_loading[index] = (LoadingAsset){0};
             wfree(bytes);
@@ -821,12 +873,12 @@ int _start()
     onKeyDown(keyhandler_buffer, handle_keydown);
     onKeyUp(keyhandler_buffer, handle_keyup);
 
-    init_graphics();
-    init_player();
-    // init_enemies();
+    graphics_init();
+    bullets_init();
+    player_init();
 
-    load_img("enemybullet.png", &game_state.bullet_types[0].texture);
-    load_img("bullet.png", &game_state.player.bullet);
+    load_img("enemybullet.png", &game_state.bullet_types[1].texture);
+    load_img("bullet.png", &game_state.bullet_types[0].texture);
     load_img("ship.png", &game_state.player.sprite.texture);
 
     requestAnimationFrameLoop(loading_screen_loop);

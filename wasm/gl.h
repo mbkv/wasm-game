@@ -643,6 +643,7 @@ JS_WEBGL_FN("glGenBuffers") void glGenBuffers(GLsizei n, GLuint *buffers);
 JS_WEBGL_FN("glGenFramebuffers") void glGenFramebuffers(GLsizei n, GLuint *framebuffers);
 JS_WEBGL_FN("glGenTextures") void glGenTextures(GLsizei n, GLuint *textures);
 JS_WEBGL_FN("glGenVertexArrays") void glGenVertexArrays(GLsizei n, GLuint *vaos);
+JS_WEBGL_FN("glGenerateMipmap") void glGenerateMipmap(GLenum target);
 JS_WEBGL_FN("glGetAttribLocation") GLint glGetAttribLocation(GLuint program, const GLchar *name);
 JS_WEBGL_FN("glGetBufferParameteriv") void glGetBufferParameteriv(GLenum target, GLenum value, GLint * data);
 JS_WEBGL_FN("glGetBufferSubData")void glGetBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, void * data);

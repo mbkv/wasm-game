@@ -2,7 +2,7 @@ import "normalize.css";
 import "./app.css";
 import { mapUpsert } from "./utils";
 
-const isDev = true;
+const isDev = false;
 
 interface WasmExports extends WebAssembly.Exports {
   memory: WebAssembly.Memory;
@@ -202,6 +202,9 @@ class ExitError extends Error {
   }
 }
 
+let lastLoggedString: string | undefined = undefined;
+let sameLoggedStringCount = 0;
+
 const wasmInstance = {
   env: {
     exit(int): never {
@@ -315,7 +318,7 @@ const wasmInstance = {
       return ms_since_epoch;
     },
     monotonic_time() {
-      return performance.now();
+      return performance.now() / 1000;
     },
     send_img_request: (filePtr: number, callbackFn: number): number => {
       const file = parseCString(filePtr);
@@ -419,7 +422,23 @@ const wasmInstance = {
           break;
         case 1: {
           const str = parseCString(buf, count);
-          console.log(str);
+          if (str === lastLoggedString) {
+            sameLoggedStringCount += 1;
+            if (
+              sameLoggedStringCount % 100 === 0 ||
+              sameLoggedStringCount < 10
+            ) {
+              console.log(
+                "last output written",
+                sameLoggedStringCount,
+                "times",
+              );
+            }
+          } else {
+            sameLoggedStringCount = 0;
+            console.log(str);
+            lastLoggedString = str;
+          }
           return str.length + 1;
         }
         case 2: {
@@ -768,6 +787,13 @@ const wasmInstance = {
           const idx = vaos.push(gl.createVertexArray());
           dataview[i] = idx;
         }
+      },
+    ),
+
+    glGenerateMipmap: makeGlFunction(
+      "glGenerateMipmap",
+      (gl, target: GLenum) => {
+        gl.generateMipmap(target);
       },
     ),
     glGetError: makeGlFunction("glGetError", () => {
