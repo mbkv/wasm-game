@@ -20,9 +20,11 @@ void requestAnimationFrameLoop(void *(*frame_loop)(f32));
 
 #define MAX_ENEMIES 50
 #define MAX_BULLETS 30
+#define GAME_WIDTH 400.0f
+#define GAME_HEIGHT 500.0f
 
 f32  scaling     = 0.0f;
-Vec2 game_size   = {400.0f, 500.0f};
+Vec2 game_size   = {GAME_WIDTH, GAME_HEIGHT};
 Vec2 window_size = {0};
 
 typedef struct
@@ -103,8 +105,8 @@ typedef struct
 typedef struct
 {
     Texture texture;
-    Vec2    size;
-    f32     speed;
+    // Vec2    size;
+    f32 speed;
 } EnemyType;
 
 typedef struct
@@ -113,6 +115,13 @@ typedef struct
     Sprite sprite;
     s16    enemy_type;
 } Enemy;
+
+typedef struct
+{
+    // f32 left;
+    // f32 right;
+    f32 direction;
+} EnemyState;
 
 typedef struct
 {
@@ -149,10 +158,11 @@ typedef struct
     RenderSystem renderer;
     Actions      actions;
     Player       player;
-    Enemy        enemies[MAX_ENEMIES];
     Bullet       bullets[MAX_BULLETS];
     BulletType   bullet_types[10];
+    Enemy        enemies[MAX_ENEMIES];
     EnemyType    enemy_types[10];
+    EnemyState   enemy_state;
     f32          delta_time;
     f32          game_time;
 } GameState;
@@ -391,8 +401,8 @@ void bullets_init(void)
     game_state.bullet_types[1].size = vec2(BULLET_WIDTH, BULLET_HEIGHT);
 }
 
-#define PLAYER_WIDTH 50
-#define PLAYER_HEIGHT 50
+#define PLAYER_WIDTH 40
+#define PLAYER_HEIGHT 40
 
 void player_init(void)
 {
@@ -403,26 +413,41 @@ void player_init(void)
     game_state.player.speed             = 1.0f;
 }
 
-// void enemies_init(void)
-// {
-//     f32 x_start   = -0.8f;
-//     f32 y_start   = 0.8f;
-//     f32 x_spacing = 0.2f;
-//     f32 y_spacing = 0.15f;
-//
-//     for (int i = 0; i < MAX_ENEMIES; i++)
-//     {
-//         int row = i / 10;
-//         int col = i % 10;
-//
-//         game_state.enemies[i].base.x      = x_start + (col * x_spacing);
-//         game_state.enemies[i].base.y      = y_start - (row * y_spacing);
-//         game_state.enemies[i].base.width  = 0.08f;
-//         game_state.enemies[i].base.height = 0.08f;
-//         game_state.enemies[i].base.active = true;
-//         game_state.enemies[i].speed       = 0.5f;
-//     }
-// }
+#define ENEMY_WIDTH 25
+#define ENEMY_HEIGHT 25
+#define ENEMY_GROUP_COLUMNS 5
+#define ENEMY_GROUP_ROWS 4
+#define ENEMY_GROUP_WIDTH (GAME_WIDTH / 2.0f)
+
+void enemies_init(void)
+{
+    f32 x_start = f32_center_child(GAME_WIDTH, ENEMY_GROUP_WIDTH);
+    f32 y_start = GAME_HEIGHT - 50.0f;
+    f32 x_spacing =
+        (ENEMY_GROUP_WIDTH - (ENEMY_WIDTH * ENEMY_GROUP_COLUMNS)) / (ENEMY_GROUP_COLUMNS - 1);
+    f32 y_spacing = x_spacing / 2.0f;
+    f32 x_adjust  = x_spacing + ENEMY_WIDTH;
+    f32 y_adjust  = y_spacing + ENEMY_HEIGHT;
+
+    int max_enemies = ENEMY_GROUP_COLUMNS * ENEMY_GROUP_ROWS;
+
+    game_state.enemy_types[0].speed = 50.0f;
+    // game_state.enemy_state.left = x_start;
+    // game_state.enemy_state.right = ENEMY_GROUP_WIDTH + ENEMY_WIDTH + x_start;
+    game_state.enemy_state.direction = 1.0f;
+
+    for (int i = 0; i < max_enemies; i++)
+    {
+        int row = i / ENEMY_GROUP_COLUMNS;
+        int col = i % ENEMY_GROUP_COLUMNS;
+
+        game_state.enemies[i].base.active       = true;
+        game_state.enemies[i].sprite.size       = vec2(ENEMY_WIDTH, ENEMY_HEIGHT);
+        game_state.enemies[i].sprite.position.x = x_start + x_adjust * col;
+        game_state.enemies[i].sprite.position.y = y_start - y_adjust * row;
+        game_state.enemies[i].sprite.texture    = game_state.enemy_types[0].texture;
+    }
+}
 
 void bullet_spawn(s32 bullet_type_key, f32 direction);
 void player_update(f32 dt)
@@ -450,40 +475,45 @@ void player_update(f32 dt)
     }
     f32 current_time = monotonic_time();
     f32 last_fire    = player->last_fire;
-    f32 fire_rate    = 0.25;
+    f32 fire_rate    = 0.1;
     if (game_state.actions.shoot && current_time > last_fire + fire_rate)
     {
         player->last_fire = current_time;
         bullet_spawn(0, 1.0f);
     }
 }
-//
-// void update_enemies(f32 dt) {
-//   static f32 time_accumulated = 0.0f;
-//   time_accumulated += dt;
-//
-//   for (int i = 0; i < MAX_ENEMIES; i++) {
-//     if (!game_state.enemies[i].base.active)
-//       continue;
-//
-//     game_state.enemies[i].base.x +=
-//         sinf(time_accumulated * game_state.enemies[i].speed) * dt;
-//   }
-// }
-//
+
 void bullets_update(f32 dt)
 {
     for (int i = 0; i < MAX_BULLETS; i++)
     {
-        if (!game_state.bullets[i].base.active)
+        Bullet *bullet = &game_state.bullets[i];
+        if (!bullet->base.active)
+        {
             continue;
-        game_state.bullets[i].sprite.position.y +=
-            game_state.bullets[i].speed * game_state.bullets[i].direction * dt;
+        }
+        bullet->sprite.position.y += bullet->speed * bullet->direction * dt;
 
-        if (game_state.bullets[i].sprite.position.y > game_size.y ||
-            game_state.bullets[i].sprite.position.y < 0)
+        if (bullet->sprite.position.y > game_size.y || bullet->sprite.position.y < 0)
         {
             game_state.bullets[i] = (Bullet){0};
+            continue;
+        }
+
+        for (int i = 0; i < MAX_ENEMIES; i++)
+        {
+            Enemy *enemy = &game_state.enemies[i];
+            if (!enemy->base.active)
+            {
+                continue;
+            }
+
+            if (rect_collides_with_rect(bullet->sprite.position, bullet->sprite.size,
+                                        enemy->sprite.position, enemy->sprite.size))
+            {
+                enemy->base.active  = false;
+                bullet->base.active = false;
+            }
         }
     }
 }
@@ -505,9 +535,49 @@ void bullet_spawn(s32 bullet_type_key, f32 direction)
             game_state.bullets[i].sprite.position = position;
             game_state.bullets[i].sprite.texture  = bullet_type.texture;
             game_state.bullets[i].sprite.size     = bullet_type.size;
-            game_state.bullets[i].speed           = 1000.0f;
+            game_state.bullets[i].speed           = 500.0f;
             game_state.bullets[i].direction       = direction;
             break;
+        }
+    }
+}
+
+void enemies_update(f32 dt)
+{
+    EnemyState *enemy_state = &game_state.enemy_state;
+    f32         min         = INFINITY;
+    f32         max         = -INFINITY;
+    for (int i = 0; i < MAX_ENEMIES; i++)
+    {
+        Enemy *enemy = &game_state.enemies[i];
+        if (enemy->base.active)
+        {
+            min = fminf(min, enemy->sprite.position.x);
+            max = fmaxf(max, enemy->sprite.position.x + enemy->sprite.size.x);
+        }
+    }
+    if (enemy_state->direction > 0)
+    {
+        if (max >= GAME_WIDTH)
+        {
+            enemy_state->direction = -1.0f;
+        }
+    }
+    else
+    {
+        if (min <= 0)
+        {
+            enemy_state->direction = 1.0f;
+        }
+    }
+
+    for (int i = 0; i < MAX_ENEMIES; i++)
+    {
+        Enemy *enemy = &game_state.enemies[i];
+        if (enemy->base.active)
+        {
+            EnemyType enemy_type = game_state.enemy_types[enemy->enemy_type];
+            enemy->sprite.position.x += dt * enemy_state->direction * enemy_type.speed;
         }
     }
 }
@@ -702,7 +772,23 @@ void *game_loop(f32 dt)
     glClear(GL_COLOR_BUFFER_BIT);
 
     player_update(dt);
+    enemies_update(dt);
     bullets_update(dt);
+
+    bool has_enemies = false;
+    for (int i = 0; i < MAX_ENEMIES; i++)
+    {
+        if (game_state.enemies[i].base.active)
+        {
+            has_enemies = true;
+            break;
+        }
+    }
+    if (!has_enemies)
+    {
+        enemies_init();
+    }
+
     background_render();
     sprite_render(&game_state.player.sprite);
     for (int i = 0; i < MAX_BULLETS; i++)
@@ -712,35 +798,19 @@ void *game_loop(f32 dt)
             sprite_render(&game_state.bullets[i].sprite);
         }
     }
+    for (int i = 0; i < MAX_ENEMIES; i++)
+    {
+        if (game_state.enemies[i].base.active)
+        {
+            sprite_render(&game_state.enemies[i].sprite);
+        }
+    }
 
     return (void *)game_loop;
 }
 
 void window_resize_handler(f32 width, f32 height)
 {
-#if 0
-    f32 game_ratio   = game_size.x / game_size.y;
-    f32 screen_ratio = width / height;
-
-    if (game_ratio <= screen_ratio)
-    {
-        scaling = height / game_size.y;
-
-        f32 adjusted_screen_width = width / scaling;
-        game_position.x           = (adjusted_screen_width - game_size.x) / 2.0f;
-        game_position.y           = 0;
-    }
-    else
-    {
-        scaling = width / game_size.x;
-
-        f32 adjusted_screen_height = height / scaling;
-        game_position.x            = 0;
-        game_position.y            = (adjusted_screen_height - game_size.y) / 2.0f;
-    }
-    // printf("game_position: %f, %f\n", game_position.x, game_position.y);
-#endif
-#if 1
     f32 game_ratio   = game_size.x / game_size.y;
     f32 screen_ratio = width / height;
 
@@ -758,14 +828,6 @@ void window_resize_handler(f32 width, f32 height)
         window_size.y = height / scaling;
         window_size.x = game_size.x;
     }
-#endif
-#if 0
-    printf("%f <= %f, scaling %f", game_ratio, screen_ratio, scaling);
-    printf("width: %f, height: %f", width, height);
-    printf("game_size.x: %f, game_size.y: %f", game_size.x, game_size.y);
-    printf("scaling %f", scaling);
-    printf("game_position.x: %f, game_position.y: %f", game_position.x, game_position.y);
-#endif
 
     glViewport(0, 0, width, height);
 }
@@ -794,6 +856,8 @@ void *loading_screen_loop(f32 diff)
 
     if (finished_assets >= all_assets)
     {
+        enemies_init();
+
         return (void *)game_loop;
     }
 #else
@@ -880,6 +944,7 @@ int _start()
     load_img("enemybullet.png", &game_state.bullet_types[1].texture);
     load_img("bullet.png", &game_state.bullet_types[0].texture);
     load_img("ship.png", &game_state.player.sprite.texture);
+    load_img("enemy.png", &game_state.enemy_types[0].texture);
 
     requestAnimationFrameLoop(loading_screen_loop);
 

@@ -210,10 +210,10 @@ const wasmInstance = {
     exit(int): never {
       throw new ExitError(int);
     },
-    breakpoint: function (): void {
+    breakpoint: function(): void {
       debugger;
     },
-    print: function (ptr: number): void {
+    print: function(ptr: number): void {
       console.log(parseCString(ptr));
     },
     setCurrentWebgl2Canvas(ptr: number): void {
@@ -234,7 +234,7 @@ const wasmInstance = {
       let prevTimestamp = performance.now();
       function main() {
         const timestamp = performance.now();
-        const diff = Math.max(timestamp - prevTimestamp, 2 / 60);
+        const diff = Math.min(timestamp - prevTimestamp, 2 / 60 * 1000);
         prevTimestamp = timestamp;
 
         try {

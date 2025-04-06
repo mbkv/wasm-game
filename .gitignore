@@ -177,6 +177,8 @@ out
 public/*.wasm
 public/*.wat
 public/*.kra
+public/*.dwo
+dist/*.dwo
 dist/*.wat
 dist/*.kra
 compile_commands.json

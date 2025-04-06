@@ -119,6 +119,11 @@ typedef struct
     };
 } Vec4;
 
+static inline f32 f32_center_child(f32 parent, f32 child)
+{
+    return (parent / 2.0f) - (child / 2.0f);
+}
+
 static inline Vec2 rect_center_child(Vec2 parent, Vec2 child)
 {
     return vec2_sub(vec2_div(parent, 2.0f), vec2_div(child, 2.0f));
@@ -134,6 +139,21 @@ static inline Vec2 rect_calculate_center(Vec2 position, Vec2 size)
 static inline Vec2 rect_calculate_position_from_center(Vec2 center, Vec2 size)
 {
     return vec2_sub(center, vec2_div(size, 2.0f));
+}
+
+static inline bool rect_collides_with_rect(Vec2 bottomLeft1, Vec2 size1, Vec2 bottomLeft2, Vec2 size2)
+{
+    Vec2 topRight1 = vec2_add(bottomLeft1, size1);
+    Vec2 topRight2 = vec2_add(bottomLeft2, size2);
+
+    if (topRight1.x <= bottomLeft2.x || topRight2.x <= bottomLeft1.x) {
+        return false;
+    }
+    if (topRight1.y <= bottomLeft2.y || topRight2.y <= bottomLeft1.y) {
+        return false;
+    }
+
+    return true;
 }
 
 #endif  // MATH_H_

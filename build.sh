@@ -11,18 +11,31 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-compile() {
-    while read -r cmd; do
-        echo "$cmd"
-        eval "$cmd"
+log() {
+    local cmd="$@"
+    echo $cmd
+    time eval "$cmd"
+}
 
-        if [ $? -ne 0 ]; then
-            return 1
-        fi
-    done << 'COMMANDS'
-clang-19 --target=wasm32 -std=c23 -pedantic -Wall -Os -g -nostdlib -Wl,--no-entry -fuse-ld=lld -fno-builtin -Wl,--allow-undefined -Wl,--export-table wasm/main.c wasm/vendor/walloc.c -o public/output.wasm
-wasm2wat public/output.wasm > public/output.wat
-COMMANDS
+compile() {
+    log bear -- clang-19 \
+         --target=wasm32 \
+         -std=c23 \
+         -pedantic \
+         -Wall \
+         -Os \
+         -g \
+         -gdwarf-5 \
+         -gsplit-dwarf \
+         -nostdlib \
+         -fuse-ld=lld \
+         -fno-builtin \
+         -Wl,--no-entry \
+         -Wl,--allow-undefined \
+         -Wl,--export-table \
+         wasm/main.c wasm/vendor/walloc.c \
+         -o public/output.wasm
+    log "wasm2wat public/output.wasm > public/output.wat"
 }
 
 if [ "$watch_mode" = true ]; then
